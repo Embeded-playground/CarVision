@@ -1,4 +1,20 @@
 venv
-yolov8n.pt
+.venv
+venv/
 __pycache__
+__pycache__/
+*.pyc
 .env
+models/*.pt
+*.pt
+*.log
+.DS_Store
+
+# Video test (besar) — folder tetap ada, isinya diabaikan
+test_videos/*.mp4
+test_videos/*.avi
+test_videos/*.mov
+test_videos/*.mkv
+test_videos/*.webm
+*.mp4~
+!test_videos/.gitkeep

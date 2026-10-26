@@ -4,5 +4,13 @@ ultralytics
 supervision
 opencv-python-headless
 python-multipart
+python-dotenv
+httpx
 numpy
 pydantic
+
+# PyTorch dengan CUDA (RTX 3050/3060, driver CUDA 13.x).
+# Install dari index khusus agar tidak mengambil build CPU:
+#   pip install --upgrade torch torchvision --index-url https://download.pytorch.org/whl/cu130
+torch
+torchvision

@@ -1,55 +1,69 @@
+import argparse
+import os
+import sys
+from pathlib import Path
+
 import cv2
-import numpy as np
-import supervision as sv
+
 from app.detector import ParkingDetector
+from app.sources import choose_source, resolve_source
 
-# 1. Inisialisasi detector & annotator
-detector = ParkingDetector(model_path="yolov8n.pt")
-box_annotator = sv.BoxAnnotator()
+WINDOW_NAME = "Parking Detection Test"
 
-# Buka file video
-video_path = "video1.mp4"
-cap = cv2.VideoCapture(video_path)
 
-# Setup Window
-window_name = "Parking Detection Test"
-cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-cv2.resizeWindow(window_name, 1280, 720)
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Uji deteksi slot parkir pada video/webcam")
+    parser.add_argument("--source", help="Path video / 0 untuk webcam")
+    parser.add_argument("--model", help="Path model .pt (default: models/yolo26m.pt)")
+    parser.add_argument("--display-scale", type=float, default=1.0, help="Skala resize tampilan (mis. 0.75)")
+    parser.add_argument("--no-loop", action="store_true", help="Jangan mengulang video saat habis")
+    args = parser.parse_args()
 
-while cap.isOpened():
-    ret, frame = cap.read()
-    if not ret:
-        break
+    if args.source is None:
+        source: str | int = choose_source()
+    else:
+        source = resolve_source(args.source)
 
-    # 2. Ambil data hasil deteksi dari detector.py
-    result = detector.process_frame(frame)
+    model_path = args.model or os.getenv("MODEL_PATH") or None
+    detector = ParkingDetector(model_path=model_path)
+    print(f"[INFO] model={detector.model_path_loaded} device={detector.device}")
 
-    # 3. Gambar ulang polygon slot parkir secara visual di frame ini
-    annotated_frame = frame.copy()
+    cap = cv2.VideoCapture(source)
+    if not cap.isOpened():
+        print(f"[ERROR] Gagal membuka sumber: {source}")
+        sys.exit(1)
 
-    # Ambil deteksi ulang khusus visualisasi
-    results_raw = detector.model(frame, verbose=False)[0]
-    detections = sv.Detections.from_ultralytics(results_raw)
-    detections = detections[np.isin(detections.class_id, detector.target_classes)]
+    cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
+    cv2.resizeWindow(WINDOW_NAME, 1280, 720)
 
-    for slot_id, polygon in detector.parking_slots.items():
-        zone = sv.PolygonZone(polygon=polygon)
-        is_occupied = bool(zone.trigger(detections=detections).any())
+    print("=" * 40)
+    print("Tekan Q untuk keluar")
+    print("=" * 40)
 
-        # Merah jika terisi, Hijau jika kosong
-        color = sv.Color.RED if is_occupied else sv.Color.GREEN
+    is_file = isinstance(source, str) and Path(source).is_file()
 
-        polygon_annotator = sv.PolygonZoneAnnotator(zone=zone, color=color, thickness=2)
-        annotated_frame = polygon_annotator.annotate(scene=annotated_frame)
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            if is_file and not args.no_loop:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                continue
+            break
 
-    # Gambar bounding box mobil
-    annotated_frame = box_annotator.annotate(scene=annotated_frame, detections=detections)
+        result = detector.process_frame(frame)
+        annotated = detector.annotate(frame, result)
 
-    # 4. Tampilkan frame
-    cv2.imshow(window_name, annotated_frame)
+        display = annotated
+        if args.display_scale != 1.0:
+            display = cv2.resize(annotated, None, fx=args.display_scale, fy=args.display_scale)
 
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
+        cv2.imshow(WINDOW_NAME, display)
+        if cv2.waitKey(1) & 0xFF == ord("q"):
+            break
 
-cap.release()
-cv2.destroyAllWindows()
+    cap.release()
+    cv2.destroyAllWindows()
+
+
+if __name__ == "__main__":
+    main()
